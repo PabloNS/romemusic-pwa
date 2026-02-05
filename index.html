@@ -9,10 +9,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RomeMusic</title>
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="icon" href="../icons/favicon.png" type="image/png">
+    <link rel="icon" href="icons/favicon.png" type="image/png">
 
     <style>
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
@@ -75,7 +75,7 @@
 <button id="installBtn" class="customBtn" style="display:none;">Install App</button>
 
 <div id="container">
-    <img id="logo" src="../icons/favicon.png" alt="Logo">
+    <img id="logo" src="icons/favicon.png" alt="Logo">
     <button id="enableAudio" class="customBtn">Start</button>
     <div id="controls">
         <button id="playBtn" class="customBtn">▶️ Play</button>
@@ -194,7 +194,7 @@
     /* ---------- AUDIO ---------- */
     function playSong(songName, locationName) {
       currentSongName = songName;
-      player.src = `../songs/${songName}`;
+      player.src = `songs/${songName}`;
 
       player.play().then(() => {
         status.textContent = `🎶 Now playing: ${songName}`;
