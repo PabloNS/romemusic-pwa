@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta property="og:title" content="Rome Music - Discover Music Around You"/>
+    <meta property="og:description" content="Play songs associated with locations"/>
+    <meta property="og:image" content="https://romemusic-dev.onrender.com/icons/favicon.png"/>
+    <meta property="og:url" content="https://romemusic-dev.onrender.com"/>
+    <meta property="og:type" content="website"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RomeMusic</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="/icons/favicon.png" type="image/png">
+
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Inter',sans-serif; }
+        body, html { height:100%; display:flex; justify-content:center; align-items:center; background:#fff; text-align:center; padding:1rem; }
+        #container { display:flex; flex-direction:column; align-items:center; gap:2rem; max-width:400px; width:100%; }
+
+        #logo { width:512px; height:521px; object-fit:contain; }
+
+        button.customBtn {
+          padding:1.5rem 2.5rem;
+          font-size:1.5rem;
+          font-weight:600;
+          border:none;
+          border-radius:16px;
+          background-color:#000;
+          color:#fff;
+          cursor:pointer;
+          transition:all 0.3s ease;
+          box-shadow:0 8px 20px rgba(0,0,0,0.2);
+        }
+        button.customBtn:hover {
+          transform:scale(1.05);
+          box-shadow:0 12px 25px rgba(0,0,0,0.3);
+        }
+
+        #controls { display:none; gap:1rem; margin-top:1rem; }
+
+        p#status { font-size:1.2rem; font-weight:500; }
+        p#location { font-size:1rem; font-weight:400; margin-top:0.5rem; color:#555; }
+
+        audio { display:none; }
+
+        #installBtn {
+          position:fixed;
+          top:1rem;
+          left:50%;
+          transform:translateX(-50%);
+          z-index:1000;
+          width:auto;
+          min-width:120px;
+          padding:0.8rem 1.5rem;
+          font-size:1rem;
+        }
+
+        @media(max-width:480px){
+          #enableAudio, #playBtn, #stopBtn {
+            width:100%;
+            font-size:1.2rem;
+            padding:1.2rem 0.8rem;
+          }
+          #logo { width:256px; height:256px; }
+
+          #installBtn { width:auto; }
+        }
+
+    </style>
+</head>
+<body>
+
+<button id="installBtn" class="customBtn" style="display:none;">Install App</button>
+
+<div id="container">
+    <img id="logo" src="/icons/favicon.png" alt="Logo">
+    <button id="enableAudio" class="customBtn">Start</button>
+    <div id="controls">
+        <button id="playBtn" class="customBtn">▶️ Play</button>
+        <button id="stopBtn" class="customBtn">⏸️ Pause</button>
+    </div>
+    <p id="status"></p>
+    <p id="location"></p>
+    <audio id="player"></audio>
+</div>
+
+<script>
+    let lastSongName = null;
+    const status = document.getElementById("status");
+    const locationText = document.getElementById("location");
+    const btn = document.getElementById("enableAudio");
+    const player = document.getElementById("player");
+    const installBtn = document.getElementById("installBtn");
+    const playBtn = document.getElementById("playBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const controls = document.getElementById("controls");
+
+    let currentSongName = null;
+    let songs = [];
+
+    /* ---------- INIT ---------- */
+    btn.addEventListener("click", activateAudio);
+
+    async function activateAudio() {
+      btn.style.display = "none";
+      status.textContent = "Loading songs…";
+
+      try {
+        await loadSongs();
+        startGeolocation();
+      } catch (e) {
+        console.error(e);
+        status.textContent = "❌ Failed to load songs";
+      }
+    }
+
+    /* ---------- LOAD JSON ---------- */
+    async function loadSongs() {
+      const res = await fetch('/placesongs.json');
+      songs = await res.json();
+    }
+
+    /* ---------- GEO ---------- */
+   function startGeolocation() {
+      if (!navigator.geolocation) {
+        status.textContent = "📍 Geolocation not supported";
+        return;
+      }
+
+      const defaultSong = { locationName: "Default", songName: "Imperium.mp3" };
+
+      navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          const song = findNearestSong(latitude, longitude);
+
+          if (song) {
+            if (song.songName !== lastSongName) {
+              lastSongName = song.songName;
+              playSong(song.songName, song.locationName);
+            }
+          } else {
+            if (lastSongName !== defaultSong.songName) {
+              lastSongName = defaultSong.songName;
+              playSong(defaultSong.songName, defaultSong.locationName);
+            }
+          }
+        },
+        err => {
+          console.warn(err);
+          status.textContent = "📍 Unable to get location";
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    }
+
+    /* ---------- DISTANCE ---------- */
+    function distanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = d => d * Math.PI / 180;
+
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    /* ---------- FIND SONG ---------- */
+   function findNearestSong(lat, lon) {
+      let nearest = null;
+      let minDist = Infinity;
+      const maxDistance = 200; // meters, adjust
+
+      for (const song of songs) {
+        const d = distanceMeters(lat, lon, song.latitude, song.longitude);
+
+        if (d <= maxDistance && d < minDist) {
+          minDist = d;
+          nearest = song;
+        }
+      }
+
+      return nearest;
+    }
+
+    /* ---------- AUDIO ---------- */
+    function playSong(songName, locationName) {
+      currentSongName = songName;
+      player.src = `/songs/${songName}`;
+
+      player.play().then(() => {
+        status.textContent = `🎶 Now playing: ${songName}`;
+        locationText.textContent = `📍 Location: ${locationName || 'Unknown'}`;
+
+        controls.style.display = "flex";
+        playBtn.style.display = "none";
+        stopBtn.style.display = "inline-block";
+      }).catch(() => {
+        btn.style.display = "block";
+        status.textContent = "⚠️ Click to enable sound";
+        controls.style.display = "none";
+      });
+    }
+
+    playBtn.addEventListener("click", () => {
+      player.play();
+      playBtn.style.display = "none";
+      stopBtn.style.display = "inline-block";
+    });
+
+    stopBtn.addEventListener("click", () => {
+      player.pause();
+      playBtn.style.display = "inline-block";
+      stopBtn.style.display = "none";
+    });
+
+    player.addEventListener("ended", () => {
+      status.textContent = "🎵 The song has ended";
+      playBtn.style.display = "inline-block";
+      stopBtn.style.display = "none";
+    });
+
+    /* ---------- PWA INSTALL ---------- */
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = 'block';
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+      }
+    });
+
+    /* ---------- iOS ---------- */
+    function isiOS() {
+      return /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    }
+    function isInStandaloneMode() {
+      return ('standalone' in navigator) && navigator.standalone;
+    }
+    if (isiOS() && !isInStandaloneMode()) {
+      installBtn.style.display = 'block';
+      installBtn.textContent = "Add to Home Screen (iOS)";
+      installBtn.onclick = () => {
+        alert('Tap Share → Add to Home Screen');
+      };
+    }
+</script>
+
+</body>
+</html>
