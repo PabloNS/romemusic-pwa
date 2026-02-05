@@ -1,7 +1,7 @@
 {
   "name": "RomeMusic",
   "short_name": "RomeMusic",
-  "start_url": "/",
+  "start_url": "/romemusic-pwa/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
